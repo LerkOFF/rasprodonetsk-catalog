@@ -103,6 +103,11 @@ for it, im in zip(catalog, imgs):
     del it["photos"]; del it["text"]
 catalog = [c for c in catalog if c["img"]]   # в каталоге только то, что есть с фото
 
+# чистим фото товаров, которых уже нет в каталоге
+keep = {c["img"].split("/")[-1] for c in catalog}
+for fn in os.listdir("site/img"):
+    if fn not in keep: os.remove("site/img/" + fn)
+
 meta = {"updated": latest, "total": len(catalog), "channel": "rasprodonetsk"}
 with open("site/data.js", "w", encoding="utf8") as f:
     f.write("window.CATALOG=" + json.dumps({"meta": meta, "items": catalog}, ensure_ascii=False, separators=(",", ":")) + ";")
