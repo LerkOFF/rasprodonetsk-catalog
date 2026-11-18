@@ -41,6 +41,11 @@ h1 small{display:block;font-size:12px;font-weight:400;color:var(--mute)}
 .tag{font-size:11px;font-weight:600;padding:3px 7px;border-radius:7px;background:var(--acc);color:#fff}
 .tag.g{background:var(--acc2)}
 .tag.n{background:var(--ink);color:var(--bg)}
+.tag.m{background:var(--mute)}
+.card.stale .ph img{opacity:.72}
+.card.gone .ph img{filter:grayscale(1);opacity:.5}
+.card.gone .price{text-decoration:line-through;color:var(--mute)}
+.note{font-size:13px;padding:9px 11px;border-radius:10px;background:var(--chip);color:var(--ink)}
 .info{padding:10px 12px 12px;display:flex;flex-direction:column;gap:6px;flex:1}
 .price{font-size:20px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .price s{font-size:13px;font-weight:400;color:var(--mute);margin-left:6px}
@@ -80,6 +85,8 @@ h1 small{display:block;font-size:12px;font-weight:400;color:var(--mute)}
   <label><input id="fpromo" type="checkbox"> акции</label>
   <label><input id="fdrop" type="checkbox"> подешевело</label>
   <label><input id="fused" type="checkbox"> без Б/У</label>
+  <label><input id="fstale" type="checkbox"> без давних</label>
+  <label><input id="fgone" type="checkbox"> показать снятые</label>
   <span class="spacer"></span>
   <span class="count" id="cnt"></span>
   <select id="sort"><option value="new">Сначала новые</option><option value="pa">Дешевле</option><option value="pd">Дороже</option></select>
@@ -104,8 +111,10 @@ function lemma(w){return w.replace(/(ами|ями|ов|ев|ей|ом|ем|ах
 function filter(){
  const words=norm($('q').value).split(/\s+/).filter(Boolean).map(w=>w.length>4?lemma(w):w);
  const pmin=+$('pmin').value||0,pmax=+$('pmax').value||Infinity;
- const fnew=$('fnew').checked,fpromo=$('fpromo').checked,fdrop=$('fdrop').checked,fused=$('fused').checked;
+ const fnew=$('fnew').checked,fpromo=$('fpromo').checked,fdrop=$('fdrop').checked,fused=$('fused').checked,fstale=$('fstale').checked;
  list=ITEMS.filter(i=>{
+  if(i.gone&&!$('fgone').checked)return false;
+  if(fstale&&i.stale)return false;
   if(cat&&i.cat!==cat)return false;
   if(words.length&&!words.every(w=>i._s.includes(w)))return false;
   if(i.price!=null&&(i.price<pmin||i.price>pmax))return false;
@@ -123,32 +132,40 @@ function filter(){
  $('grid').innerHTML='';shown=0;$('empty').hidden=list.length>0;more();
 }
 function card(i){
- const el=document.createElement('div');el.className='card';
- const tags=(i.promo?'<span class="tag">акция</span>':'')+(i.used?'<span class="tag n">Б/У</span>':'')+((i.price_prev&&i.price&&i.price<i.price_prev)?'<span class="tag g">подешевело</span>':'');
+ const el=document.createElement('div');el.className='card'+(i.gone?' gone':i.stale?' stale':'');
+ const tags=(i.gone?'<span class="tag n">снят</span>':'')+(i.promo?'<span class="tag">акция</span>':'')+(i.promo_ended?'<span class="tag m">акция закончилась</span>':'')+(i.stale?'<span class="tag m">давно висит</span>':'')+(i.used?'<span class="tag n">Б/У</span>':'')+((i.price_prev&&i.price&&i.price<i.price_prev)?'<span class="tag g">подешевело</span>':'');
  el.innerHTML=`<div class="ph"><img loading="lazy" src="${i.img}" alt=""><div class="tags">${tags}</div></div>
  <div class="info"><div class="price">${fmt(i.price)}${i.price_prev&&i.price&&i.price!==i.price_prev?`<s>${fmt(i.price_prev)}</s>`:''}</div>
  <div class="ttl"></div><div class="meta"><span>${i.cat}</span><span>${dayAgo(i._t)}</span></div></div>`;
  el.querySelector('.ttl').textContent=i.title;
  el.onclick=()=>open(i);return el}
 function more(){const f=document.createDocumentFragment();list.slice(shown,shown+PAGE).forEach(i=>f.appendChild(card(i)));shown+=PAGE;$('grid').appendChild(f)}
+function note(i){
+ if(i.gone)return `<div class="note">Пост удалён из канала ${new Date(i.gone_at).toLocaleDateString('ru-RU')}, товар скорее всего продан.</div>`;
+ const n=[];
+ if(i.promo_ended)n.push('Акция закончилась, цена в посте могла измениться.');
+ if(i.stale)n.push('Пост висит больше 14 дней. Лучше уточнить наличие до поездки.');
+ return n.length?`<div class="note">${n.join(' ')}</div>`:'';
+}
 function open(i){
  const c=$('lbc');c.innerHTML=`<img src="${i.img}" alt=""><div class="lbi"><h2></h2><div class="price">${fmt(i.price)}</div><dl>
  <dt>Категория</dt><dd>${i.cat}</dd><dt>Выложен</dt><dd>${new Date(i.date).toLocaleDateString('ru-RU')} (${dayAgo(i._t)})</dd>
  ${i.reposts?`<dt>Повторов</dt><dd>${i.reposts}, впервые ${new Date(i.first_seen).toLocaleDateString('ru-RU')}</dd>`:''}
- ${i.price_prev?`<dt>Была цена</dt><dd>${fmt(i.price_prev)}</dd>`:''}</dl>
- <a class="btn" target="_blank" rel="noopener" href="https://t.me/${D.meta.channel}/${i.id}">Открыть пост в Telegram</a></div>`;
+ ${i.price_prev?`<dt>Была цена</dt><dd>${fmt(i.price_prev)}</dd>`:''}</dl>${note(i)}
+ ${i.gone?'':`<a class="btn" target="_blank" rel="noopener" href="https://t.me/${D.meta.channel}/${i.id}">Открыть пост в Telegram</a>`}</div>`;
  c.querySelector('h2').textContent=i.title;$('lb').classList.add('on')}
 const close=()=>$('lb').classList.remove('on');
 $('lbx').onclick=close;$('lb').onclick=e=>{if(e.target===$('lb'))close()};document.addEventListener('keydown',e=>e.key==='Escape'&&close());
-const cc={};ITEMS.forEach(i=>cc[i.cat]=(cc[i.cat]||0)+1);
-const names=Object.keys(cc).sort((a,b)=>cc[b]-cc[a]);
 function chips(){ $('cats').innerHTML='';
- [['','Все',ITEMS.length],...names.map(n=>[n,n,cc[n]])].forEach(([v,t,n])=>{
+ const base=ITEMS.filter(i=>!i.gone||$('fgone').checked),cc={};base.forEach(i=>cc[i.cat]=(cc[i.cat]||0)+1);
+ const names=Object.keys(cc).sort((a,b)=>cc[b]-cc[a]);
+ [['','Все',base.length],...names.map(n=>[n,n,cc[n]])].forEach(([v,t,n])=>{
   const b=document.createElement('button');b.className='chip'+(cat===v?' on':'');b.innerHTML=`${t}<b>${n}</b>`;
   b.onclick=()=>{cat=v;chips();filter()};$('cats').appendChild(b)})}
 chips();
 let tm;$('q').oninput=()=>{clearTimeout(tm);tm=setTimeout(filter,120)};
-['pmin','pmax','fnew','fpromo','fdrop','fused','sort'].forEach(id=>$(id).addEventListener('input',filter));
+['pmin','pmax','fnew','fpromo','fdrop','fused','fstale','sort'].forEach(id=>$(id).addEventListener('input',filter));
+$('fgone').addEventListener('input',()=>{chips();filter()});
 new IntersectionObserver(e=>{if(e[0].isIntersecting&&shown<list.length)more()},{rootMargin:'600px'}).observe($('more'));
 filter();
 </script>

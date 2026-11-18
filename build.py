@@ -60,16 +60,34 @@ for p in posts.values():
         if cat != "Разное": break
     used = bool(re.search(r'\bб/?у\b|бывш', p["text"], re.I))
     promo = bool(re.search(r'акци|скидк|только сегодня|🔥', p["text"], re.I))
-    items.append({"id": p["id"], "date": p["date"], "title": title[:160], "price": price, "cat": cat,
+    until = None   # до какого дня действует цена по акции
+    m = re.search(r'(?:срок до|до|по)\s*(\d{1,2})\.(\d{1,2})\.(\d{2,4})', p["text"], re.I)
+    if m and re.search(r'срок|акци|распродаж|скидк', p["text"], re.I):
+        y = int(m.group(3)); y += 2000 if y < 100 else 0
+        try: until = datetime.date(y, int(m.group(2)), int(m.group(1))).isoformat()
+        except ValueError: pass
+    if until is None and re.search(r'только сегодня', p["text"], re.I):
+        until = p["date"][:10]
+    items.append({"id": p["id"], "until": until, "date": p["date"], "title": title[:160], "price": price, "cat": cat,
                   "used": used, "promo": promo, "photos": p["photos"][:3], "text": p["text"]})
 
 # дубли: один и тот же товар выкладывают повторно, держим последний пост + историю
+gone = json.load(open("data/gone.json")) if os.path.exists("data/gone.json") else {}
+today = now.date()
 groups = defaultdict(list)
 for it in items: groups[norm(it["title"])[:80]].append(it)
 catalog = []
 for k, g in groups.items():
     g.sort(key=lambda x: x["id"])
-    last = dict(g[-1])
+    alive = [x for x in g if str(x["id"]) not in gone]   # посты, которые ещё есть в канале
+    last = dict(alive[-1] if alive else g[-1])           # свежий повтор подтверждает, что товар есть
+    last["gone"] = not alive
+    last["gone_at"] = gone.get(str(last["id"])) if not alive else None
+    age = (today - datetime.datetime.fromisoformat(last["date"]).date()).days
+    last["stale"] = (not last["gone"]) and age > 14      # давно висит, наличие под вопросом
+    ended = bool(last["until"]) and datetime.date.fromisoformat(last["until"]) < today
+    last["promo_ended"] = ended and last["promo"]
+    if ended: last["promo"] = False
     last["reposts"] = len(g) - 1
     last["first_seen"] = g[0]["date"]
     last["prices"] = [x["price"] for x in g if x["price"]]
