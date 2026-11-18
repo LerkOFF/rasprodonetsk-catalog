@@ -72,6 +72,17 @@ h1 small{display:block;font-size:12px;font-weight:400;color:var(--mute)}
 .lbi dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px;color:var(--mute)}
 .lbi dd{margin:0;color:var(--ink)}
 .btn{display:inline-block;padding:11px 16px;border-radius:11px;background:var(--acc);color:#fff;text-decoration:none;font-weight:600;text-align:center;margin-top:auto}
+.pickup{border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;background:color-mix(in srgb,var(--chip) 55%,transparent)}
+.pickup h3{margin:0;font-size:14px}
+.pickup ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.pickup a{color:var(--acc);font-weight:600;text-decoration:none;white-space:nowrap}
+.pickup .st{font-weight:600}
+.pickup .st.on{color:var(--acc2)}
+.pickup .st.off{color:var(--mute)}
+.pickup small{color:var(--mute);font-size:12px;line-height:1.35}
+.acts{display:flex;gap:8px;margin-top:auto}
+.acts .btn{flex:1;margin-top:0}
+.btn.sec{background:var(--chip);color:var(--ink)}
 .x{position:absolute;right:20px;top:14px;background:none;border:0;color:#fff;font-size:30px;cursor:pointer}
 .prow{display:contents}
 .tabs,.back,.sheet-h,.sheet-apply,.mline{display:none}
@@ -135,7 +146,8 @@ h1 small{display:block;font-size:12px;font-weight:400;color:var(--mute)}
  .lbi{padding:14px 16px calc(14px + var(--sb));gap:10px}
  .lbi h2{font-size:16px}
  .lbi .price{font-size:28px}
- .lbi .btn{position:sticky;bottom:calc(var(--sb) + 4px);padding:14px;font-size:16px;margin-top:6px}
+ .acts{position:sticky;bottom:calc(var(--sb) + 4px);margin-top:6px}
+ .lbi .btn{padding:14px;font-size:15px}
  .x{position:fixed;right:12px;top:calc(var(--st) + 10px);width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.55);font-size:22px;line-height:36px;padding:0;text-align:center}
 }
 </style>
@@ -231,12 +243,30 @@ function note(i){
  if(i.stale)n.push('Пост висит больше 14 дней. Лучше уточнить наличие до поездки.');
  return n.length?`<div class="note">${n.join(' ')}</div>`:'';
 }
+const SHOP={tel:'+79498269381',telView:'+7 (949) 826-93-81',addr:'проспект Павших Коммунаров 188б, Донецк',hint:'на Яндекс Картах: «металобаза Альянс решений»',
+ map:'https://yandex.ru/maps/?text='+encodeURIComponent('Донецк, проспект Павших Коммунаров 188б'),hours:{wd:[10,17],we:[10,15]}};
+function shopState(){
+ const p=new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Moscow',weekday:'short',hour:'numeric',minute:'numeric',hourCycle:'h23'}).formatToParts(new Date());
+ const g=t=>p.find(x=>x.type===t).value,dayN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(g('weekday')),t=+g('hour')+(+g('minute'))/60;
+ const hrs=d=>(d===0||d===6)?SHOP.hours.we:SHOP.hours.wd;
+ const [o,c]=hrs(dayN);
+ if(t>=o&&t<c)return{on:true,text:`Сейчас открыто, до ${c}:00`};
+ if(t<o)return{on:false,text:`Сейчас закрыто, откроется сегодня в ${o}:00`};
+ const nd=(dayN+1)%7;return{on:false,text:`Сейчас закрыто, откроется завтра в ${hrs(nd)[0]}:00`}}
+function pickup(i){
+ if(i.gone)return `<div class="pickup"><h3>Хотите похожий товар?</h3><div>Позвоните на склад: <a href="tel:${SHOP.tel}">${SHOP.telView}</a></div></div>`;
+ const st=shopState();
+ return `<div class="pickup"><h3>Как забрать товар</h3><ol>
+ <li>Позвоните <a href="tel:${SHOP.tel}">${SHOP.telView}</a>, назовите товар и цену и уточните, что он на месте и можно ли отложить.</li>
+ <li>Приезжайте на склад: ${SHOP.addr} (${SHOP.hint}). <a target="_blank" rel="noopener" href="${SHOP.map}">Маршрут</a></li>
+ <li>Режим: пн-пт 10:00-17:00, сб-вс 10:00-15:00. <span class="st ${st.on?'on':'off'}">${st.text}</span></li></ol>
+ <small>График меняется из-за поставок. Оплату и доставку уточняйте по телефону.</small></div>`}
 var open=function(i){
  const c=$('lbc');c.innerHTML=`<img src="${i.img}" alt=""><div class="lbi"><h2></h2><div class="price">${fmt(i.price)}</div><dl>
  <dt>Категория</dt><dd>${i.cat}</dd><dt>Выложен</dt><dd>${new Date(i.date).toLocaleDateString('ru-RU')} (${dayAgo(i._t)})</dd>
  ${i.reposts?`<dt>Повторов</dt><dd>${i.reposts}, впервые ${new Date(i.first_seen).toLocaleDateString('ru-RU')}</dd>`:''}
- ${i.price_prev?`<dt>Была цена</dt><dd>${fmt(i.price_prev)}</dd>`:''}</dl>${note(i)}
- ${i.gone?'':`<a class="btn" target="_blank" rel="noopener" href="https://t.me/${D.meta.channel}/${i.id}">Открыть пост в Telegram</a>`}</div>`;
+ ${i.price_prev?`<dt>Была цена</dt><dd>${fmt(i.price_prev)}</dd>`:''}</dl>${note(i)}${pickup(i)}
+ <div class="acts"><a class="btn" href="tel:${SHOP.tel}">Позвонить</a>${i.gone?'':`<a class="btn sec" target="_blank" rel="noopener" href="https://t.me/${D.meta.channel}/${i.id}">Пост в Telegram</a>`}</div></div>`;
  c.querySelector('h2').textContent=i.title;$('lb').classList.add('on')};
 /* слои (карточка товара, фильтры): кнопка Назад на телефоне закрывает слой, а не уходит со страницы */
 let layer=null;
